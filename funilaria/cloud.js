@@ -47,7 +47,7 @@ renderLogin=()=>renderCloudLogin();
 function renderCloudLogin(){
  document.body.classList.add('locked');$('#tabs').innerHTML='';
  const signup=cloudMode==='signup';
- $('#app').innerHTML='<section class="login-panel"><div class="login-brand"><img src="login-logo.svg?v=12" alt="HD Motors"><div><b>HD MOTORS</b><small>FUNILARIA E PINTURA</small></div></div><h1>'+ (cloudRecovery?'Criar nova senha':signup?'Criar conta na nuvem':'Entrar na conta')+'</h1><p class="muted">Use a mesma conta em qualquer aparelho para acessar suas ordens e pagamentos.</p><form id="login-form">'+(cloudRecovery?'':'<label for="cloud-email">E-mail</label><input id="cloud-email" name="username" type="email" autocomplete="username" required>')+'<label for="cloud-password">Senha</label><input id="cloud-password" name="password" type="password" autocomplete="'+(signup||cloudRecovery?'new-password':'current-password')+'" required minlength="8">'+(signup||cloudRecovery?'<label>Confirmar senha</label><input name="confirm" type="password" autocomplete="new-password" required minlength="8">':'')+'<p id="login-error" class="error notice" role="alert" hidden></p><button class="wide">'+(cloudRecovery?'Salvar nova senha':signup?'Criar conta':'Entrar')+'</button></form><div class="toolbar">'+(cloudRecovery?'':btn(signup?'Já tenho conta':'Criar conta','cloud-mode')+btn('Esqueci minha senha','cloud-reset'))+'</div><p class="muted small">O acesso antigo era local. Crie uma conta com e-mail para usar a nuvem. Para transferir ordens antigas, importe o backup depois de entrar. É necessário internet para sincronizar.</p></section>';
+ $('#app').innerHTML='<section class="login-panel"><div class="login-brand"><img src="login-logo.svg?v=12" alt="HD Motors"><div><b>HD MOTORS</b><small>FUNILARIA E PINTURA</small></div></div><h1>'+ (cloudRecovery?'Criar nova senha':signup?'Criar conta na nuvem':'Entrar na conta')+'</h1><p class="muted">Use a mesma conta em qualquer aparelho para acessar suas ordens e pagamentos.</p><form id="login-form">'+(cloudRecovery?'':'<label for="cloud-email">E-mail</label><input id="cloud-email" name="username" type="email" autocomplete="username" required>')+'<label for="cloud-password">Senha</label><input id="cloud-password" name="password" type="password" autocomplete="'+(signup||cloudRecovery?'new-password':'current-password')+'" required minlength="8">'+(signup||cloudRecovery?'<label>Confirmar senha</label><input name="confirm" type="password" autocomplete="new-password" required minlength="8">':'')+'<p id="login-error" class="error notice" role="alert" hidden></p><button class="wide">'+(cloudRecovery?'Salvar nova senha':signup?'Criar conta':'Entrar')+'</button></form><div class="toolbar">'+(cloudRecovery?'':btn(signup?'Já tenho conta':'Criar conta','cloud-mode'))+'</div><p class="muted small">O acesso antigo era local. Crie uma conta com e-mail para usar a nuvem. Para transferir ordens antigas, importe o backup depois de entrar. O cadastro não exige confirmação por e-mail. Guarde sua senha: a recuperação por e-mail está desativada. É necessário internet para sincronizar.</p></section>';
 }
 handleLogin=async form=>{
  const v=formData(form),button=form.querySelector('button');button.disabled=true;
@@ -85,11 +85,7 @@ document.addEventListener('click',async e=>{
    if(action==='logout')return await logoutCloud();
    if(action==='reset-access')return alert('O acesso agora pertence à conta na nuvem. Use Sair da conta para entrar com outro cliente.');
    if(action==='cloud-mode'){cloudMode=cloudMode==='login'?'signup':'login';renderCloudLogin();return;}
-   if(action==='cloud-reset'){
-    const email=$('#cloud-email')?.value.trim();if(!email)return alert('Informe seu e-mail primeiro.');
-    const {error}=await cloudClient.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});if(error)throw error;
-    alert('Se houver uma conta com este e-mail e o envio estiver configurado, você receberá um link para redefinir a senha.');return;
-   }
+   if(action==='cloud-reset')return alert('A recuperação por e-mail está desativada.');
    if(action==='cloud-sync'){cloudBusy=true;for(const s of STORE_NAMES)state.records[s]=await all(s);await saveCloud();render();return;}
    if(action==='cloud-load'){
     cloudBusy=true;
