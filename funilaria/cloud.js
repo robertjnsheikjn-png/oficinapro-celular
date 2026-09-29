@@ -47,7 +47,7 @@ renderLogin=()=>renderCloudLogin();
 function renderCloudLogin(){
  document.body.classList.add('locked');$('#tabs').innerHTML='';
  const signup=cloudMode==='signup';
- $('#app').innerHTML='<section class="login-panel"><div class="login-brand"><img src="login-logo.svg?v=12" alt="HD Motors"><div><b>HD MOTORS</b><small>FUNILARIA E PINTURA</small></div></div><h1>'+ (cloudRecovery?'Criar nova senha':signup?'Criar conta na nuvem':'Entrar na conta')+'</h1><p class="muted">Use a mesma conta em qualquer aparelho para acessar suas ordens e pagamentos.</p><form id="login-form">'+(cloudRecovery?'':'<label for="cloud-email">E-mail</label><input id="cloud-email" name="username" type="email" autocomplete="username" required>')+'<label for="cloud-password">Senha</label><input id="cloud-password" name="password" type="password" autocomplete="'+(signup||cloudRecovery?'new-password':'current-password')+'" required minlength="8">'+(signup||cloudRecovery?'<label>Confirmar senha</label><input name="confirm" type="password" autocomplete="new-password" required minlength="8">':'')+'<p id="login-error" class="error notice" role="alert" hidden></p><button class="wide">'+(cloudRecovery?'Salvar nova senha':signup?'Criar conta':'Entrar')+'</button></form><div class="toolbar">'+(cloudRecovery?'':btn(signup?'Já tenho conta':'Criar conta','cloud-mode'))+'</div><p class="muted small">O acesso antigo era local. Crie uma conta com e-mail para usar a nuvem. Para transferir ordens antigas, importe o backup depois de entrar. O cadastro não exige confirmação por e-mail. Guarde sua senha: a recuperação por e-mail está desativada. É necessário internet para sincronizar.</p></section>';
+ $('#app').innerHTML='<section class="login-panel"><div class="login-brand"><img src="login-logo.svg?v=12" alt="HD Motors"><div><b>HD MOTORS</b><small>FUNILARIA E PINTURA</small></div></div><h1>'+ (cloudRecovery?'Criar nova senha':signup?'Criar conta na nuvem':'Entrar na conta')+'</h1><p class="muted">Use a mesma conta em qualquer aparelho para acessar suas ordens e pagamentos.</p><form id="login-form">'+(cloudRecovery?'':'<label for="cloud-email">E-mail</label><input id="cloud-email" name="username" type="email" autocomplete="username" required>')+'<label for="cloud-password">Senha</label><input id="cloud-password" name="password" type="password" autocomplete="'+(signup||cloudRecovery?'new-password':'current-password')+'" required minlength="8">'+(signup||cloudRecovery?'<label>Confirmar senha</label><input name="confirm" type="password" autocomplete="new-password" required minlength="8">':'')+'<p id="login-error" class="error notice" role="alert" hidden></p><button class="wide">'+(cloudRecovery?'Salvar nova senha':signup?'Criar conta':'Entrar')+'</button></form><div class="toolbar">'+(cloudRecovery?'':btn(signup?'Já tenho conta':'Criar conta','cloud-mode'))+'</div><p class="muted small">O acesso antigo era local. Crie uma conta com e-mail para usar a nuvem. Para transferir ordens antigas, importe o backup depois de entrar. O cadastro não exige confirmação por e-mail. Guarde sua senha: a recuperação por e-mail está desativada. É necessário internet para sincronizar.</p>'+ (localStorage.getItem(AUTH_KEY)?'<details><summary>Baixar ordens do acesso antigo deste aparelho</summary><form id="legacy-export-form"><label>Usuário antigo</label><input name="username" autocomplete="username" required><label>Senha antiga</label><input name="password" type="password" autocomplete="current-password" required><button>Baixar backup antigo</button></form></details>':'')+'</section>';
 }
 handleLogin=async form=>{
  const v=formData(form),button=form.querySelector('button');button.disabled=true;
@@ -116,3 +116,18 @@ cloudClient?.auth.onAuthStateChange(event=>{if(event==='PASSWORD_RECOVERY'){clou
   if(data.session)await enterCloud();else renderCloudLogin();
  }catch(e){authenticated=false;renderCloudLogin();const box=$('#login-error');box.textContent='Não foi possível carregar a conta: '+e.message;box.hidden=false;}
 })();
+
+document.addEventListener('submit',async e=>{
+ if(e.target.id!=='legacy-export-form')return;
+ e.preventDefault();e.stopImmediatePropagation();
+ const button=e.target.querySelector('button');button.disabled=true;let legacyDb;
+ try{
+  const v=formData(e.target),saved=JSON.parse(localStorage.getItem(AUTH_KEY)||'null');
+  if(!saved||v.username.trim()!==saved.username||await passwordDigest(v.password,saved.salt)!==saved.digest)throw Error('Usuário ou senha do acesso antigo incorretos.');
+  legacyDb=await new Promise((resolve,reject)=>{const r=indexedDB.open('oficinapro-funilaria');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+  const stores={};for(const name of STORE_NAMES)stores[name]=legacyDb.objectStoreNames.contains(name)?await request(legacyDb.transaction(name).objectStore(name).getAll()):[];
+  const blob=new Blob([JSON.stringify({format:'OficinaPro-Funilaria',version:1,exported_at:now(),stores},null,2)],{type:'application/json'});
+  const a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download='funilaria-backup-antigo-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);
+  alert('Backup antigo baixado. Entre na conta da nuvem e use Sistema → Importar backup para transferir essas ordens.');
+ }catch(err){alert(err.message);}finally{legacyDb?.close();button.disabled=false;}
+},true);
