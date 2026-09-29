@@ -25,6 +25,17 @@ function empty(label){return `<div class="empty">Nenhum ${label} cadastrado.</di
 function row(title,subtitle,actions){return `<div class="item"><div><b>${esc(title)}</b><small>${esc(subtitle)}</small></div><div class="actions">${actions}</div></div>`;}
 function btn(label,act,id='',style='secondary'){return `<button type="button" class="${style}" data-act="${act}" data-id="${id}">${label}</button>`;}
 
+let installPrompt=null;
+const appInstalled=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event;if(authenticated&&state.view==='sistema')render();});
+addEventListener('appinstalled',()=>{installPrompt=null;if(authenticated)msg('App instalado com sucesso!');});
+async function installApp(){
+ if(appInstalled())return msg('O app já está instalado e aberto neste aparelho.');
+ if(!installPrompt)return msg('Para instalar: abra este link no Chrome, toque nos três pontos (⋮) e escolha Instalar app ou Adicionar à tela inicial.');
+ const prompt=installPrompt;installPrompt=null;
+ try{await prompt.prompt();const choice=await prompt.userChoice;if(choice.outcome==='accepted')msg('Instalação solicitada. Confira a tela inicial do aparelho.');}
+ catch(error){msg('Abra o menu do Chrome (⋮) e escolha Instalar app ou Adicionar à tela inicial.');}
+}
 let authenticated=false;
 const AUTH_KEY='oficinapro-funilaria-access-v1';
 function credentials(){return JSON.parse(localStorage.getItem(AUTH_KEY)||'null');}
@@ -54,7 +65,7 @@ function render(){
  if(state.view==='ordens')html=shell('Serviços e ordens',`<div class="panel">${[...list('service_orders')].reverse().map(x=>row(`OS #${x.id} · ${carName(x)}`,`${x.status} · ${paymentSummary(x).label} · ${money(x.total)} · ${x.complaint||''}`,btn('Abrir','open-order',x.id)+btn('Editar','edit-order',x.id))).join('')||empty('ordem')}</div>`,btn('+ Serviço','new-order','',''));
  if(state.view==='pagas')html=paidOrdersView();
  if(state.view==='financeiro')html=financialView();
- if(state.view==='sistema')html=shell('Sistema',`<div class="panel"><h2>Acesso</h2><p>Usuário: ${esc(credentials()?.username)}</p>${btn('Sair da conta','logout')}${btn('Apagar acesso de teste','reset-access','','danger')}<p class="muted small">Apaga apenas o login e a senha deste aparelho para cadastrar outro acesso. As ordens e pagamentos são mantidos.</p></div><div class="panel"><h2>Dados da oficina</h2><form id="settings-form"><label>Nome</label><input name="company" value="${esc(setting('company'))}"><label>CNPJ / CPF</label><input name="document" value="${esc(setting('document'))}"><label>Telefone</label><input name="phone" value="${esc(setting('phone'))}"><label>Endereço</label><input name="address" value="${esc(setting('address'))}"><button class="wide">Salvar dados</button></form></div><div class="panel"><h2>Cópia de segurança</h2><p class="muted">Os dados ficam neste celular. Exporte uma cópia regularmente, especialmente antes de trocar de aparelho.</p><div class="toolbar">${btn('Baixar backup','export','','')}${btn('Importar backup','import')}</div><input type="file" id="import-file" accept=".json,application/json" hidden></div><div class="panel"><h2>Instalação</h2><p>Abra o menu do Chrome e toque em <b>Adicionar à tela inicial</b> ou <b>Instalar app</b>.</p><p class="muted small">Esta versão é independente. Os dados deste aparelho não são sincronizados com o OficinaPro do PC.</p></div>`);
+ if(state.view==='sistema')html=shell('Sistema',`<div class="panel"><h2>Acesso</h2><p>Usuário: ${esc(credentials()?.username)}</p>${btn('Sair da conta','logout')}${btn('Apagar acesso de teste','reset-access','','danger')}<p class="muted small">Apaga apenas o login e a senha deste aparelho para cadastrar outro acesso. As ordens e pagamentos são mantidos.</p></div><div class="panel"><h2>Dados da oficina</h2><form id="settings-form"><label>Nome</label><input name="company" value="${esc(setting('company'))}"><label>CNPJ / CPF</label><input name="document" value="${esc(setting('document'))}"><label>Telefone</label><input name="phone" value="${esc(setting('phone'))}"><label>Endereço</label><input name="address" value="${esc(setting('address'))}"><button class="wide">Salvar dados</button></form></div><div class="panel"><h2>Cópia de segurança</h2><p class="muted">Os dados ficam neste celular. Exporte uma cópia regularmente, especialmente antes de trocar de aparelho.</p><div class="toolbar">${btn('Baixar backup','export','','')}${btn('Importar backup','import')}</div><input type="file" id="import-file" accept=".json,application/json" hidden></div><div class="panel"><h2>Instalação</h2><div class="toolbar">${btn(appInstalled()?\'App já instalado\':\'Baixar / instalar app\',\'install-app\',\'\',\'\')}</div><p>Abra o menu do Chrome e toque em <b>Adicionar à tela inicial</b> ou <b>Instalar app</b>.</p><p class="muted small">Esta versão é independente. Os dados deste aparelho não são sincronizados com o OficinaPro do PC.</p></div>`);
  $('#app').innerHTML=html;
 }
 function field(label,key,value='',type='text',extra=''){return `<label for="f-${key}">${label}</label><input id="f-${key}" name="${key}" type="${type}" value="${esc(value)}" ${extra}>`;}
@@ -132,6 +143,7 @@ document.addEventListener('click',async e=>{
  if(e.target.closest('[data-act=reset-access]')){if(!confirm('Apagar o acesso deste aparelho e cadastrar o cliente? As ordens e pagamentos serão mantidos.'))return;localStorage.removeItem(AUTH_KEY);authenticated=false;state.view='ordens';closeModal();render();return;}
  const tab=e.target.closest('[data-view]');if(tab){go(tab.dataset.view);return;}
  const el=e.target.closest('[data-act]');if(!el)return;e.preventDefault();const a=el.dataset.act,id=Number(el.dataset.id);try{
+  if(a==='install-app')return installApp();
   if(a==='close')return closeModal();
   if(a==='new-order'||a==='edit-order')return orderForm(byId('service_orders',id));
   if(a==='open-order')return orderDetail(id);
