@@ -19,7 +19,7 @@ function setting(key){return list('settings').find(x=>x.key===key)?.value||'';}
 async function saveSetting(key,value){const old=list('settings').find(x=>x.key===key);await put('settings',{id:old?.id,key,value});}
 function msg(text){state.message=text;render();setTimeout(()=>{if(state.message===text){state.message='';render();}},6000);}
 function go(view){state.view=view;render();scrollTo(0,0);}
-const nav=[['ordens','Serviços'],['financeiro','Financeiro'],['sistema','Sistema']];
+const nav=[['ordens','Serviços'],['pagas','Ordens pagas'],['financeiro','Financeiro'],['sistema','Sistema']];
 function shell(title,content,action=''){return `<div class="top"><h1>${title}</h1>${action}</div>${state.message?`<p class="notice success">${esc(state.message)}</p>`:''}${content}`;}
 function empty(label){return `<div class="empty">Nenhum ${label} cadastrado.</div>`;}
 function row(title,subtitle,actions){return `<div class="item"><div><b>${esc(title)}</b><small>${esc(subtitle)}</small></div><div class="actions">${actions}</div></div>`;}
@@ -52,6 +52,7 @@ function render(){
  $('#tabs').innerHTML=nav.map(([id,label])=>`<button class="${state.view===id?'active':''}" data-view="${id}">${label}</button>`).join('');
  let html='';
  if(state.view==='ordens')html=shell('Serviços e ordens',`<div class="panel">${[...list('service_orders')].reverse().map(x=>row(`OS #${x.id} · ${carName(x)}`,`${x.status} · ${paymentSummary(x).label} · ${money(x.total)} · ${x.complaint||''}`,btn('Abrir','open-order',x.id)+btn('Editar','edit-order',x.id))).join('')||empty('ordem')}</div>`,btn('+ Serviço','new-order','',''));
+ if(state.view==='pagas')html=paidOrdersView();
  if(state.view==='financeiro')html=financialView();
  if(state.view==='sistema')html=shell('Sistema',`<div class="panel"><h2>Acesso</h2><p>Usuário: ${esc(credentials()?.username)}</p>${btn('Sair da conta','logout')}${btn('Apagar acesso de teste','reset-access','','danger')}<p class="muted small">Apaga apenas o login e a senha deste aparelho para cadastrar outro acesso. As ordens e pagamentos são mantidos.</p></div><div class="panel"><h2>Dados da oficina</h2><form id="settings-form"><label>Nome</label><input name="company" value="${esc(setting('company'))}"><label>CNPJ / CPF</label><input name="document" value="${esc(setting('document'))}"><label>Telefone</label><input name="phone" value="${esc(setting('phone'))}"><label>Endereço</label><input name="address" value="${esc(setting('address'))}"><button class="wide">Salvar dados</button></form></div><div class="panel"><h2>Cópia de segurança</h2><p class="muted">Os dados ficam neste celular. Exporte uma cópia regularmente, especialmente antes de trocar de aparelho.</p><div class="toolbar">${btn('Baixar backup','export','','')}${btn('Importar backup','import')}</div><input type="file" id="import-file" accept=".json,application/json" hidden></div><div class="panel"><h2>Instalação</h2><p>Abra o menu do Chrome e toque em <b>Adicionar à tela inicial</b> ou <b>Instalar app</b>.</p><p class="muted small">Esta versão é independente. Os dados deste aparelho não são sincronizados com o OficinaPro do PC.</p></div>`);
  $('#app').innerHTML=html;
@@ -167,6 +168,11 @@ function financialData(){
  const payments=list('payments').filter(p=>inPeriod(p.paid_at||''));
  const paidFor=o=>list('payments').filter(p=>p.order_id===o.id).reduce((n,p)=>n+Number(p.amount||0),0);
  return {orders:selected,payments,total:selected.reduce((n,o)=>n+Number(o.total||0),0),received:payments.reduce((n,p)=>n+Number(p.amount||0),0),balance:selected.reduce((n,o)=>n+Math.max(0,Number(o.total||0)-paidFor(o)),0),paidFor};
+}
+function paidOrders(){return list('service_orders').filter(o=>paymentSummary(o).label==='Pago');}
+function paidOrdersView(){
+ const orders=paidOrders();
+ return shell('Ordens de serviço pagas',`<p class="muted">Ordens com o valor total recebido. A situação do serviço (aberta ou concluída) é independente do pagamento.</p><div class="cards"><div class="card">Ordens pagas<strong>${orders.length}</strong></div><div class="card">Valor das ordens pagas<strong>${money(orders.reduce((sum,o)=>sum+Number(o.total||0),0))}</strong></div></div><div class="panel">${[...orders].reverse().map(o=>row('OS #'+o.id+' · '+carName(o),'Pago · Serviço: '+o.status+' · Total '+money(o.total)+' · Recebido '+money(paymentSummary(o).paid)+' · '+(o.complaint||''),btn('Abrir','open-order',o.id)+btn('Enviar ao cliente','share-order',o.id))).join('')||empty('ordem paga')}</div>`);
 }
 function financialView(){
  const r=financialData();
