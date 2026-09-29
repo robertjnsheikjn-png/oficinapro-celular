@@ -23,7 +23,7 @@ const nav=[['ordens','Serviços'],['financeiro','Financeiro'],['sistema','Sistem
 function shell(title,content,action=''){return `<div class="top"><h1>${title}</h1>${action}</div>${state.message?`<p class="notice success">${esc(state.message)}</p>`:''}${content}`;}
 function empty(label){return `<div class="empty">Nenhum ${label} cadastrado.</div>`;}
 function row(title,subtitle,actions){return `<div class="item"><div><b>${esc(title)}</b><small>${esc(subtitle)}</small></div><div class="actions">${actions}</div></div>`;}
-function btn(label,act,id='',style='secondary'){return `<button class="${style}" data-act="${act}" data-id="${id}">${label}</button>`;}
+function btn(label,act,id='',style='secondary'){return `<button type="button" class="${style}" data-act="${act}" data-id="${id}">${label}</button>`;}
 
 let authenticated=false;
 const AUTH_KEY='oficinapro-funilaria-access-v1';
@@ -59,7 +59,22 @@ function render(){
 function field(label,key,value='',type='text',extra=''){return `<label for="f-${key}">${label}</label><input id="f-${key}" name="${key}" type="${type}" value="${esc(value)}" ${extra}>`;}
 function select(label,key,items,value=''){return `<label for="f-${key}">${label}</label><select id="f-${key}" name="${key}">${items.map(([v,t])=>`<option value="${esc(v)}" ${String(v)===String(value)?'selected':''}>${esc(t)}</option>`).join('')}</select>`;}
 function options(s,label='name'){return list(s).map(x=>[x.id,x[label]||x.model||'—']);}
-function modal(title,body,submit,values={}){const d=$('#modal');$('#modalContent').innerHTML=`<h2>${esc(title)}</h2><form id="entry-form" data-submit="${submit}"><input type="hidden" name="id" value="${esc(values.id||'')}">${body}<div class="dialog-actions"><button type="button" class="secondary" data-act="close">Cancelar</button><button type="submit">Salvar</button></div></form>`;d.showModal();}
+function modal(title,body,submit,values={}){const d=$('#modal');$('#modalContent').innerHTML=`<h2>${esc(title)}</h2><form id="entry-form" data-submit="${submit}"><input type="hidden" name="id" value="${esc(values.id||'')}">${body}<div class="dialog-actions"><button type="button" class="secondary" data-act="close">Cancelar</button><button type="submit">Salvar</button></div></form>`;showModal();}
+// Keep an in-app Back step while a form is open on Android.
+function showModal(){
+ const d=$('#modal');
+ if(d.open)return;
+ history.pushState({...history.state,funilariaModal:true},'');
+ d.showModal();
+}
+function closeModal(){
+ const d=$('#modal');
+ if(!d.open)return;
+ d.close();
+ if(history.state?.funilariaModal)history.back();
+}
+addEventListener('popstate',()=>{if($('#modal').open)$('#modal').close();});
+$('#modal').addEventListener('cancel',e=>{e.preventDefault();closeModal();});
 function formData(form){return Object.fromEntries(new FormData(form).entries());}
 function ownerName(o){return o?.owner_name||name('clients',o?.client_id);}
 function carName(o){const a=byId('assets',o?.asset_id);return [o?.car_model||[a?.brand,a?.model].filter(Boolean).join(' '),o?.car_plate||a?.plate_serial].filter(Boolean).join(' · ')||'Veículo não informado';}
@@ -78,7 +93,7 @@ function orderForm(x={}){
  textArea('Observações','notes',x.notes),'order',x);
 }
 
-function orderDetail(id){const o=byId('service_orders',id);if(!o)return;const items=list('order_items').filter(x=>x.order_id===id),payments=list('payments').filter(x=>x.order_id===id);$('#modalContent').innerHTML=`<h2>OS #${id}</h2><p><b>${esc(carName(o))}</b><br>${esc(ownerName(o))} · ${esc(o.status)}</p><p>${esc(o.complaint||'Sem descrição')}</p><h3>Serviços da ordem</h3>${items.map(x=>row(x.description,`${x.quantity} × ${money(x.unit_price)} = ${money(x.total)}`,btn('Remover','remove-item',x.id,'danger'))).join('')||'<p>Nenhum item.</p>'}<p>Total: <b>${money(o.total)}</b><br>Pago: ${money(payments.reduce((n,x)=>n+Number(x.amount),0))}</p><div class="toolbar">${btn('Adicionar serviço','add-item',id,'')}${btn('Pagamento','add-payment',id,'')}${btn('Imprimir','print-order',id)}${btn('Excluir OS','delete-order',id,'danger')}</div><button class="wide secondary" data-act="close">Fechar</button>`;$('#modal').showModal();}
+function orderDetail(id){const o=byId('service_orders',id);if(!o)return;const items=list('order_items').filter(x=>x.order_id===id),payments=list('payments').filter(x=>x.order_id===id);$('#modalContent').innerHTML=`<h2>OS #${id}</h2><p><b>${esc(carName(o))}</b><br>${esc(ownerName(o))} · ${esc(o.status)}</p><p>${esc(o.complaint||'Sem descrição')}</p><h3>Serviços da ordem</h3>${items.map(x=>row(x.description,`${x.quantity} × ${money(x.unit_price)} = ${money(x.total)}`,btn('Remover','remove-item',x.id,'danger'))).join('')||'<p>Nenhum item.</p>'}<p>Total: <b>${money(o.total)}</b><br>Pago: ${money(payments.reduce((n,x)=>n+Number(x.amount),0))}</p><div class="toolbar">${btn('Adicionar serviço','add-item',id,'')}${btn('Pagamento','add-payment',id,'')}${btn('Imprimir','print-order',id)}${btn('Excluir OS','delete-order',id,'danger')}</div><button class="wide secondary" data-act="close">Fechar</button>`;showModal();}
 async function recalc(id){const order=byId('service_orders',id)||await request(state.db.transaction('service_orders').objectStore('service_orders').get(id));if(!order)return;const items=await all('order_items');order.total=Math.max(0,items.filter(x=>x.order_id===id).reduce((n,x)=>n+Number(x.total),0)+Number(order.labor||0)-Number(order.discount||0));await put('service_orders',order);}
 async function submit(kind,v){
  const id=Number(v.id)||undefined;
@@ -94,18 +109,18 @@ async function submit(kind,v){
  await refresh();
 }
 document.addEventListener('click',async e=>{
- if(e.target.closest('[data-act=logout]')){authenticated=false;state.view='ordens';if($('#modal').open)$('#modal').close();render();return;}
+ if(e.target.closest('[data-act=logout]')){authenticated=false;state.view='ordens';if($('#modal').open)closeModal();render();return;}
  if(!authenticated)return;
  const tab=e.target.closest('[data-view]');if(tab){go(tab.dataset.view);return;}
- const el=e.target.closest('[data-act]');if(!el)return;const a=el.dataset.act,id=Number(el.dataset.id);try{
-  if(a==='close')return $('#modal').close();
+ const el=e.target.closest('[data-act]');if(!el)return;e.preventDefault();const a=el.dataset.act,id=Number(el.dataset.id);try{
+  if(a==='close')return closeModal();
   if(a==='new-order'||a==='edit-order')return orderForm(byId('service_orders',id));
   if(a==='open-order')return orderDetail(id);
   if(a==='add-item')return modal('Adicionar serviço',`<input type="hidden" name="order_id" value="${id}">`+field('Descrição do serviço *','description','','text','required')+field('Quantidade','quantity',1,'number','min="0.01" step="0.01" required')+field('Valor unitário R$','unit_price',0,'number','min="0" step="0.01" required'),'item');
   if(a==='add-payment')return modal('Registrar pagamento',`<input type="hidden" name="order_id" value="${id}">`+field('Data','paid_at',today(),'date')+field('Valor R$','amount',0,'number','min="0.01" step="0.01" required')+select('Forma','method',['PIX','Dinheiro','Cartão','Transferência','Outro'].map(x=>[x,x]))+field('Observação','note'),'payment');
   if(a==='delete-payment'){if(confirm('Excluir pagamento?'))await remove('payments',id);}
-  if(a==='remove-item'){const item=byId('order_items',id);if(item&&confirm('Remover este serviço da OS?')){await remove('order_items',id);await recalc(item.order_id);await refresh();$('#modal').close();orderDetail(item.order_id);return;}}
-  if(a==='delete-order'){if(confirm('Excluir esta OS, seus serviços e pagamentos?')){const tx=state.db.transaction(['order_items','payments','service_orders'],'readwrite');for(const item of list('order_items').filter(x=>x.order_id===id))tx.objectStore('order_items').delete(item.id);for(const payment of list('payments').filter(x=>x.order_id===id))tx.objectStore('payments').delete(payment.id);tx.objectStore('service_orders').delete(id);await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});$('#modal').close();}}
+  if(a==='remove-item'){const item=byId('order_items',id);if(item&&confirm('Remover este serviço da OS?')){await remove('order_items',id);await recalc(item.order_id);await refresh();orderDetail(item.order_id);return;}}
+  if(a==='delete-order'){if(confirm('Excluir esta OS, seus serviços e pagamentos?')){const tx=state.db.transaction(['order_items','payments','service_orders'],'readwrite');for(const item of list('order_items').filter(x=>x.order_id===id))tx.objectStore('order_items').delete(item.id);for(const payment of list('payments').filter(x=>x.order_id===id))tx.objectStore('payments').delete(payment.id);tx.objectStore('service_orders').delete(id);await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});closeModal();}}
   if(a==='print-order'){const o=byId('service_orders',id),items=list('order_items').filter(x=>x.order_id===id);const w=open('','_blank');if(!w)throw Error('Permita janelas para imprimir.');w.document.write(`<title>OS #${id}</title><meta charset="utf-8"><body style="font:16px Arial;max-width:760px;margin:30px auto"><h1>${esc(setting('company')||'OficinaPro')}</h1><p>${esc(setting('address'))} · ${esc(setting('phone'))}</p><hr><h2>Ordem de serviço #${id}</h2><p>Cliente: ${esc(ownerName(o))}<br>Veículo: ${esc(carName(o))}<br>Situação: ${esc(o.status)}<br>Dano / solicitação: ${esc(o.complaint)}<br>Avaliação: ${esc(o.diagnosis)}<br>Serviço: ${esc(o.service_description)}</p><h3>Serviços</h3>${items.map(x=>`<p>${esc(x.description)} · ${esc(x.quantity)} × ${money(x.unit_price)}</p>`).join('')}<p>Serviço principal: ${money(o.labor)}<br>Desconto: ${money(o.discount)}</p><h2>Total: ${money(o.total)}</h2><script>print()<\/script></body>`);w.document.close();return;}
   if(a==='financial-csv')return exportFinancial();
   if(a==='financial-print')return printFinancial();
@@ -119,7 +134,7 @@ document.addEventListener('submit',async e=>{
  if(e.target.id==='login-form'){e.preventDefault();await handleLogin(e.target);return;}
  if(!authenticated){e.preventDefault();return;}
  if(e.target.id==='settings-form'){e.preventDefault();const v=formData(e.target);for(const [key,value] of Object.entries(v))await saveSetting(key,value);await refresh();return msg('Dados da oficina salvos.');}
- if(e.target.id!=='entry-form')return;e.preventDefault();const form=e.target,kind=form.dataset.submit;try{await submit(kind,formData(form));$('#modal').close();msg('Salvo com sucesso.');}catch(err){alert(err.message||'Não foi possível salvar.');}
+ if(e.target.id!=='entry-form')return;e.preventDefault();const form=e.target,kind=form.dataset.submit;try{await submit(kind,formData(form));closeModal();msg('Salvo com sucesso.');}catch(err){alert(err.message||'Não foi possível salvar.');}
 });
 function exportBackup(){const data={format:'OficinaPro-Funilaria',version:1,exported_at:now(),stores:state.records};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='funilaria-backup-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000);}
 document.addEventListener('change',async e=>{if(!authenticated||e.target.id!=='import-file')return;try{const raw=JSON.parse(await e.target.files[0].text());if(raw.format!=='OficinaPro-Funilaria'||raw.version!==1||!STORE_NAMES.every(s=>Array.isArray(raw.stores[s])))throw Error('Arquivo de backup inválido.');if(!confirm('Substituir TODOS os dados deste celular pelo backup?'))return;const tx=state.db.transaction(STORE_NAMES,'readwrite');for(const s of STORE_NAMES){const st=tx.objectStore(s);st.clear();for(const record of raw.stores[s])st.put(record);}await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});await refresh();msg('Backup importado.');}catch(err){alert(err.message||'Falha ao importar.');}e.target.value='';});
