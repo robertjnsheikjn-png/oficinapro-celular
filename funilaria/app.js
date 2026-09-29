@@ -12,7 +12,7 @@ const name=(s,id)=>byId(s,id)?.name||'—';
 function request(req){return new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
 function openDb(){return new Promise((resolve,reject)=>{const r=indexedDB.open('oficinapro-funilaria',1);r.onupgradeneeded=()=>{for(const name of STORE_NAMES)if(!r.result.objectStoreNames.contains(name))r.result.createObjectStore(name,{keyPath:'id',autoIncrement:true});};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
 async function all(s){return request(state.db.transaction(s).objectStore(s).getAll());}
-async function put(s,x){return request(state.db.transaction(s,'readwrite').objectStore(s).put(x));}
+async function put(s,x){const record={...x};if(record.id===undefined||record.id===null||record.id==='')delete record.id;return request(state.db.transaction(s,'readwrite').objectStore(s).put(record));}
 async function remove(s,id){return request(state.db.transaction(s,'readwrite').objectStore(s).delete(Number(id)));}
 async function refresh(){for(const s of STORE_NAMES)state.records[s]=await all(s);$('#companyName').textContent=setting('company')||'Minha Funilaria';render();}
 function setting(key){return list('settings').find(x=>x.key===key)?.value||'';}
