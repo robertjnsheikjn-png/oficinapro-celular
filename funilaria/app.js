@@ -18,7 +18,7 @@ async function refresh(){for(const s of STORE_NAMES)state.records[s]=await all(s
 function setting(key){return list('settings').find(x=>x.key===key)?.value||'';}
 async function saveSetting(key,value){const old=list('settings').find(x=>x.key===key);await put('settings',{id:old?.id,key,value});}
 function msg(text){state.message=text;render();setTimeout(()=>{if(state.message===text){state.message='';render();}},6000);}
-function go(view){state.view=view;render();scrollTo(0,0);}
+function go(view){if(view===state.view)return;state.view=view;sessionStorage.setItem(VIEW_KEY,view);history.pushState({funilaria:true,view},'');render();scrollTo(0,0);}
 const nav=[['ordens','Serviços'],['pagas','Ordens pagas'],['financeiro','Financeiro'],['sistema','Sistema']];
 function shell(title,content,action=''){return `<div class="top"><h1>${title}</h1>${action}</div>${state.message?`<p class="notice success">${esc(state.message)}</p>`:''}${content}`;}
 function empty(label){return `<div class="empty">Nenhum ${label} cadastrado.</div>`;}
@@ -38,6 +38,25 @@ async function installApp(){
 }
 let authenticated=false;
 const AUTH_KEY='oficinapro-funilaria-access-v1';
+const SESSION_KEY='oficinapro-funilaria-session-v1';
+const VIEW_KEY='oficinapro-funilaria-view-v1';
+function restoreSession(){
+ const saved=credentials();
+ authenticated=!!saved&&sessionStorage.getItem(SESSION_KEY)===saved.digest;
+ const view=sessionStorage.getItem(VIEW_KEY);
+ state.view=authenticated&&nav.some(([id])=>id===view)?view:'ordens';
+ document.body.classList.toggle('locked',!authenticated);
+}
+function startNavigation(){
+ // One base entry keeps Android Back inside the app at the initial screen.
+ if(!history.state?.funilaria){
+  history.replaceState({funilaria:true,base:true},'');
+  history.pushState({funilaria:true,view:state.view},'');
+ }else{
+  history.replaceState({...history.state,funilariaModal:false,view:state.view},'');
+  if(history.state.base)history.pushState({funilaria:true,view:state.view},'');
+ }
+}
 function credentials(){return JSON.parse(localStorage.getItem(AUTH_KEY)||'null');}
 async function passwordDigest(password,salt){
  const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveBits']);
@@ -54,7 +73,7 @@ async function handleLogin(form){
   let saved=credentials();
   if(!saved){if(values.password.length<6||values.password!==values.confirm)throw Error('As senhas devem coincidir e ter pelo menos 6 caracteres.');const salt=crypto.randomUUID();saved={username:values.username.trim(),salt,digest:await passwordDigest(values.password,salt)};if(!saved.username)throw Error('Informe o usuário.');localStorage.setItem(AUTH_KEY,JSON.stringify(saved));}
   else if(values.username.trim()!==saved.username||await passwordDigest(values.password,saved.salt)!==saved.digest)throw Error('Usuário ou senha incorretos.');
-  authenticated=true;document.body.classList.remove('locked');render();
+  sessionStorage.setItem(SESSION_KEY,saved.digest);authenticated=true;document.body.classList.remove('locked');render();
  }catch(error){const box=$('#login-error');box.textContent=error.message;box.hidden=false;}finally{button.disabled=false;}
 }
 
@@ -72,20 +91,27 @@ function field(label,key,value='',type='text',extra=''){return `<label for="f-${
 function select(label,key,items,value=''){return `<label for="f-${key}">${label}</label><select id="f-${key}" name="${key}">${items.map(([v,t])=>`<option value="${esc(v)}" ${String(v)===String(value)?'selected':''}>${esc(t)}</option>`).join('')}</select>`;}
 function options(s,label='name'){return list(s).map(x=>[x.id,x[label]||x.model||'—']);}
 function modal(title,body,submit,values={}){const d=$('#modal');$('#modalContent').innerHTML=`<h2>${esc(title)}</h2><form id="entry-form" data-submit="${submit}"><input type="hidden" name="id" value="${esc(values.id||'')}">${body}<div class="dialog-actions"><button type="button" class="secondary" data-act="close">Cancelar</button><button type="submit">Salvar</button></div></form>`;showModal();}
-// Keep an in-app Back step while a form is open on Android.
 function showModal(){
- const d=$('#modal');
- if(d.open)return;
- history.pushState({...history.state,funilariaModal:true},'');
+ const d=$('#modal');if(d.open)return;
+ history.pushState({funilaria:true,view:state.view,funilariaModal:true},'');
  d.showModal();
 }
 function closeModal(){
- const d=$('#modal');
- if(!d.open)return;
- d.close();
- if(history.state?.funilariaModal){const next={...history.state};delete next.funilariaModal;history.replaceState(next,'');}
+ const d=$('#modal');if(!d.open)return;d.close();
+ if(history.state?.funilariaModal)history.back();
 }
-addEventListener('popstate',()=>{if($('#modal').open)$('#modal').close();});
+addEventListener('popstate',event=>{
+ if($('#modal').open)$('#modal').close();
+ const current=event.state;
+ if(current?.base||!current?.funilaria){
+  state.view='ordens';
+  history.pushState({funilaria:true,view:state.view},'');
+ }else{
+  state.view=nav.some(([id])=>id===current.view)?current.view:'ordens';
+ }
+ sessionStorage.setItem(VIEW_KEY,state.view);
+ render();scrollTo(0,0);
+});
 $('#modal').addEventListener('cancel',e=>{e.preventDefault();closeModal();});
 function formData(form){return Object.fromEntries(new FormData(form).entries());}
 function ownerName(o){return o?.owner_name||name('clients',o?.client_id);}
@@ -138,7 +164,7 @@ async function submit(kind,v){
  await refresh();
 }
 document.addEventListener('click',async e=>{
- if(e.target.closest('[data-act=logout]')){authenticated=false;state.view='ordens';if($('#modal').open)closeModal();render();return;}
+ if(e.target.closest('[data-act=logout]')){sessionStorage.removeItem(SESSION_KEY);sessionStorage.removeItem(VIEW_KEY);authenticated=false;state.view='ordens';if($('#modal').open)closeModal();render();return;}
  if(!authenticated)return;
  if(e.target.closest('[data-act=reset-access]')){if(!confirm('Apagar o acesso deste aparelho e cadastrar o cliente? As ordens e pagamentos serão mantidos.'))return;localStorage.removeItem(AUTH_KEY);authenticated=false;state.view='ordens';closeModal();render();return;}
  const tab=e.target.closest('[data-view]');if(tab){go(tab.dataset.view);return;}
@@ -200,5 +226,5 @@ function printFinancial(){
  w.document.write(`<meta charset="utf-8"><title>Relatório financeiro</title><body style="font:16px Arial;padding:24px"><h1>${esc(setting('company')||'HD Motors')}</h1><h2>Relatório financeiro</h2><p>Período: ${esc(reportPeriod.from||'Início')} até ${esc(reportPeriod.until||'Hoje')}</p><p>Valor das OS: ${money(r.total)}<br>Recebido no período: ${money(r.received)}<br>Saldo das OS: ${money(r.balance)}</p>${r.orders.map(o=>`<p>OS #${o.id} · ${esc(ownerName(o))} · ${esc(o.status)} · ${esc(paymentSummary(o).label)}<br>Total: ${money(o.total)} · Pago: ${money(r.paidFor(o))} · Saldo: ${money(Math.max(0,Number(o.total)-r.paidFor(o)))}</p>`).join('')}<script>print()<\/script></body>`);w.document.close();
 }
 
-(async()=>{try{state.db=await openDb();await refresh();if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});}catch(err){$('#app').innerHTML=`<div class="notice error">Não foi possível abrir o banco de dados do aparelho: ${esc(err.message)}</div>`;}})();
+(async()=>{try{restoreSession();startNavigation();state.db=await openDb();await refresh();if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});}catch(err){$('#app').innerHTML=`<div class="notice error">Não foi possível abrir o banco de dados do aparelho: ${esc(err.message)}</div>`;}})();
 
