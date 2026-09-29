@@ -1,6 +1,4 @@
-if(!window.supabase){document.getElementById('app').textContent='Não foi possível carregar a conexão com a nuvem. Verifique a internet e atualize.';}else{
-
-const cloudClient=window.supabase.createClient('https://dlkzhzovyhxocmxvkijh.supabase.co','sb_publishable_zEN5cW-Qj8K1JMN0l301Pw_8rDjFAV4',{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+const cloudClient=window.supabase?.createClient('https://dlkzhzovyhxocmxvkijh.supabase.co','sb_publishable_zEN5cW-Qj8K1JMN0l301Pw_8rDjFAV4',{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 let cloudUser=null,cloudRevision=0,cloudSnapshot='',cloudPending=false,cloudBusy=false,cloudConflict=false,cloudMode='login',cloudRecovery=false;
 const stableJson=value=>JSON.stringify(value,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])):v);
 const pendingKey=()=> 'hdmotors-cloud-pending-'+cloudUser.id;
@@ -112,14 +110,13 @@ document.addEventListener('submit',e=>{
  if(e.target.id==='login-form')return;
  if(cloudBusy||cloudConflict){e.preventDefault();e.stopImmediatePropagation();return;}
 },true);
-cloudClient.auth.onAuthStateChange(event=>{if(event==='PASSWORD_RECOVERY'){cloudRecovery=true;renderCloudLogin();}});
+cloudClient?.auth.onAuthStateChange(event=>{if(event==='PASSWORD_RECOVERY'){cloudRecovery=true;renderCloudLogin();}});
 (async()=>{
  try{
+  if(!cloudClient)throw Error('Verifique a internet e atualize para carregar a conexão com a nuvem.');
   startNavigation();
   if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
   const {data,error}=await cloudClient.auth.getSession();if(error)throw error;
   if(data.session)await enterCloud();else renderCloudLogin();
  }catch(e){authenticated=false;renderCloudLogin();const box=$('#login-error');box.textContent='Não foi possível carregar a conta: '+e.message;box.hidden=false;}
 })();
-
-}
