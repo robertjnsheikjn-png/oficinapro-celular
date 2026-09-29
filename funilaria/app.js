@@ -14,7 +14,7 @@ function openDb(){return new Promise((resolve,reject)=>{const r=indexedDB.open('
 async function all(s){return request(state.db.transaction(s).objectStore(s).getAll());}
 async function put(s,x){const record={...x};if(record.id===undefined||record.id===null||record.id==='')delete record.id;return request(state.db.transaction(s,'readwrite').objectStore(s).put(record));}
 async function remove(s,id){return request(state.db.transaction(s,'readwrite').objectStore(s).delete(Number(id)));}
-async function refresh(){for(const s of STORE_NAMES)state.records[s]=await all(s);$('#companyName').textContent=setting('company')||'HD Motors';render();}
+async function refresh(){for(const s of STORE_NAMES)state.records[s]=await all(s);$('#companyName').textContent='HD Motors — Funilaria e Pintura';render();}
 function setting(key){return list('settings').find(x=>x.key===key)?.value||'';}
 async function saveSetting(key,value){const old=list('settings').find(x=>x.key===key);await put('settings',{id:old?.id,key,value});}
 function msg(text){state.message=text;render();setTimeout(()=>{if(state.message===text){state.message='';render();}},6000);}
