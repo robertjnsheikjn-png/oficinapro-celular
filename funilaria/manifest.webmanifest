@@ -1,2 +1,1 @@
-{"name":"OficinaPro Funilaria","short_name":"OficinaPro Funilaria","description":"Ordens de serviço e financeiro para funilaria","start_url":"./","scope":"./","display":"standalone","background_color":"#101319","theme_color":"#101319","icons":[{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}
-
+{"name": "Aleda Gestão — Funilaria", "short_name": "Aleda Funilaria", "description": "Ordens de serviço e financeiro para funilaria", "start_url": "./", "scope": "./", "display": "standalone", "background_color": "#091b29", "theme_color": "#091b29", "icons": [{"src": "icon.svg?v=3", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}], "id": "./"}
