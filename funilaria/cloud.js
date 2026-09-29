@@ -1,3 +1,4 @@
+if(!window.supabase){document.getElementById('app').textContent='Não foi possível carregar a conexão com a nuvem. Verifique a internet e atualize.';}else{
 
 const cloudClient=window.supabase.createClient('https://dlkzhzovyhxocmxvkijh.supabase.co','sb_publishable_zEN5cW-Qj8K1JMN0l301Pw_8rDjFAV4',{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 let cloudUser=null,cloudRevision=0,cloudSnapshot='',cloudPending=false,cloudBusy=false,cloudConflict=false,cloudMode='login',cloudRecovery=false;
@@ -120,3 +121,5 @@ cloudClient.auth.onAuthStateChange(event=>{if(event==='PASSWORD_RECOVERY'){cloud
   if(data.session)await enterCloud();else renderCloudLogin();
  }catch(e){authenticated=false;renderCloudLogin();const box=$('#login-error');box.textContent='Não foi possível carregar a conta: '+e.message;box.hidden=false;}
 })();
+
+}
