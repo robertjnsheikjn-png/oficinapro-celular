@@ -71,7 +71,7 @@ function closeModal(){
  const d=$('#modal');
  if(!d.open)return;
  d.close();
- if(history.state?.funilariaModal)history.back();
+ if(history.state?.funilariaModal){const next={...history.state};delete next.funilariaModal;history.replaceState(next,'');}
 }
 addEventListener('popstate',()=>{if($('#modal').open)$('#modal').close();});
 $('#modal').addEventListener('cancel',e=>{e.preventDefault();closeModal();});
@@ -134,7 +134,7 @@ document.addEventListener('submit',async e=>{
  if(e.target.id==='login-form'){e.preventDefault();await handleLogin(e.target);return;}
  if(!authenticated){e.preventDefault();return;}
  if(e.target.id==='settings-form'){e.preventDefault();const v=formData(e.target);for(const [key,value] of Object.entries(v))await saveSetting(key,value);await refresh();return msg('Dados da oficina salvos.');}
- if(e.target.id!=='entry-form')return;e.preventDefault();const form=e.target,kind=form.dataset.submit;try{await submit(kind,formData(form));closeModal();msg('Salvo com sucesso.');}catch(err){alert(err.message||'Não foi possível salvar.');}
+ if(e.target.id!=='entry-form')return;e.preventDefault();const form=e.target,kind=form.dataset.submit,button=form.querySelector('button[type=submit]');if(button?.disabled)return;if(button)button.disabled=true;try{await submit(kind,formData(form));closeModal();msg('Salvo com sucesso.');}catch(err){alert(err.message||'Não foi possível salvar.');}finally{if(button)button.disabled=false;}
 });
 function exportBackup(){const data={format:'OficinaPro-Funilaria',version:1,exported_at:now(),stores:state.records};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='funilaria-backup-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000);}
 document.addEventListener('change',async e=>{if(!authenticated||e.target.id!=='import-file')return;try{const raw=JSON.parse(await e.target.files[0].text());if(raw.format!=='OficinaPro-Funilaria'||raw.version!==1||!STORE_NAMES.every(s=>Array.isArray(raw.stores[s])))throw Error('Arquivo de backup inválido.');if(!confirm('Substituir TODOS os dados deste celular pelo backup?'))return;const tx=state.db.transaction(STORE_NAMES,'readwrite');for(const s of STORE_NAMES){const st=tx.objectStore(s);st.clear();for(const record of raw.stores[s])st.put(record);}await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});await refresh();msg('Backup importado.');}catch(err){alert(err.message||'Falha ao importar.');}e.target.value='';});
