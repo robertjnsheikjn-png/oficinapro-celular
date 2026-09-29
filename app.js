@@ -24,7 +24,31 @@ function shell(title,content,action=''){return `<div class="top"><h1>${title}</h
 function empty(label){return `<div class="empty">Nenhum ${label} cadastrado.</div>`;}
 function row(title,subtitle,actions){return `<div class="item"><div><b>${esc(title)}</b><small>${esc(subtitle)}</small></div><div class="actions">${actions}</div></div>`;}
 function btn(label,act,id='',style='secondary'){return `<button class="${style}" data-act="${act}" data-id="${id}">${label}</button>`;}
+
+let authenticated=false;
+const AUTH_KEY='oficinapro-access-v1';
+function credentials(){return JSON.parse(localStorage.getItem(AUTH_KEY)||'null');}
+async function passwordDigest(password,salt){
+ const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveBits']);
+ const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:new TextEncoder().encode(salt),iterations:210000,hash:'SHA-256'},key,256);
+ return Array.from(new Uint8Array(bits),b=>b.toString(16).padStart(2,'0')).join('');
+}
+function renderLogin(){
+ const setup=!credentials();document.body.classList.add('locked');$('#tabs').innerHTML='';
+ $('#app').innerHTML=`<section class="login-panel"><img src="icon.svg" alt="" width="64" height="64"><h1>OficinaPro</h1><p class="muted">${setup?'Crie seu acesso neste celular':'Entre para gerenciar sua oficina'}</p><form id="login-form"><label for="login-user">Usuário</label><input id="login-user" name="username" autocomplete="username" value="admin" required maxlength="80"><label for="login-password">Senha</label><input id="login-password" name="password" type="password" autocomplete="${setup?'new-password':'current-password'}" required ${setup?'minlength="6"':''}>${setup?'<label for="login-confirm">Confirmar senha</label><input id="login-confirm" name="confirm" type="password" autocomplete="new-password" minlength="6" required>':''}<p id="login-error" class="error notice" role="alert" hidden></p><button class="wide">${setup?'Criar acesso':'Entrar'}</button></form><p class="muted small">Acesso local deste aparelho. As contas do PC não são sincronizadas. Este bloqueio não criptografa os dados armazenados.</p></section>`;
+}
+async function handleLogin(form){
+ const values=formData(form),button=form.querySelector('button');button.disabled=true;
+ try{
+  let saved=credentials();
+  if(!saved){if(values.password.length<6||values.password!==values.confirm)throw Error('As senhas devem coincidir e ter pelo menos 6 caracteres.');const salt=crypto.randomUUID();saved={username:values.username.trim(),salt,digest:await passwordDigest(values.password,salt)};if(!saved.username)throw Error('Informe o usuário.');localStorage.setItem(AUTH_KEY,JSON.stringify(saved));}
+  else if(values.username.trim()!==saved.username||await passwordDigest(values.password,saved.salt)!==saved.digest)throw Error('Usuário ou senha incorretos.');
+  authenticated=true;document.body.classList.remove('locked');render();
+ }catch(error){const box=$('#login-error');box.textContent=error.message;box.hidden=false;}finally{button.disabled=false;}
+}
+
 function render(){
+ if(!authenticated)return renderLogin();
  $('#tabs').innerHTML=nav.map(([id,label])=>`<button class="${state.view===id?'active':''}" data-view="${id}">${label}</button>`).join('');
  let html='';
  if(state.view==='inicio'){
@@ -43,7 +67,7 @@ function render(){
   const orders=list('service_orders').filter(x=>x.status!=='Cancelada').reduce((n,x)=>n+Number(x.total||0),0);
   html=shell('Financeiro',`<div class="cards"><div class="card">Vendas diretas<strong>${money(sales)}</strong></div><div class="card">Pagamentos OS<strong>${money(paid)}</strong></div><div class="card">Total em OS<strong>${money(orders)}</strong></div><div class="card">A receber OS<strong>${money(Math.max(0,orders-paid))}</strong></div></div><div class="panel"><h2>Pagamentos recebidos</h2>${[...list('payments')].reverse().map(x=>row(`OS #${x.order_id} · ${money(x.amount)}`,`${x.paid_at} · ${x.method||''}`,btn('Excluir','delete-payment',x.id,'danger'))).join('')||empty('pagamento')}</div>`);
  }
- if(state.view==='sistema')html=shell('Sistema',`<div class="panel"><h2>Dados da oficina</h2><form id="settings-form"><label>Nome</label><input name="company" value="${esc(setting('company'))}"><label>CNPJ / CPF</label><input name="document" value="${esc(setting('document'))}"><label>Telefone</label><input name="phone" value="${esc(setting('phone'))}"><label>Endereço</label><input name="address" value="${esc(setting('address'))}"><button class="wide">Salvar dados</button></form></div><div class="panel"><h2>Cópia de segurança</h2><p class="muted">Os dados ficam neste celular. Exporte uma cópia regularmente, especialmente antes de trocar de aparelho.</p><div class="toolbar">${btn('Baixar backup','export','','')}${btn('Importar backup','import')}</div><input type="file" id="import-file" accept=".json,application/json" hidden></div><div class="panel"><h2>Instalação</h2><p>Abra o menu do Chrome e toque em <b>Adicionar à tela inicial</b> ou <b>Instalar app</b>.</p><p class="muted small">Esta versão é independente. Os dados deste aparelho não são sincronizados com o OficinaPro do PC.</p></div>`);
+ if(state.view==='sistema')html=shell('Sistema',`<div class="panel"><h2>Acesso</h2><p>Usuário: ${esc(credentials()?.username)}</p>${btn('Sair da conta','logout')}</div><div class="panel"><h2>Dados da oficina</h2><form id="settings-form"><label>Nome</label><input name="company" value="${esc(setting('company'))}"><label>CNPJ / CPF</label><input name="document" value="${esc(setting('document'))}"><label>Telefone</label><input name="phone" value="${esc(setting('phone'))}"><label>Endereço</label><input name="address" value="${esc(setting('address'))}"><button class="wide">Salvar dados</button></form></div><div class="panel"><h2>Cópia de segurança</h2><p class="muted">Os dados ficam neste celular. Exporte uma cópia regularmente, especialmente antes de trocar de aparelho.</p><div class="toolbar">${btn('Baixar backup','export','','')}${btn('Importar backup','import')}</div><input type="file" id="import-file" accept=".json,application/json" hidden></div><div class="panel"><h2>Instalação</h2><p>Abra o menu do Chrome e toque em <b>Adicionar à tela inicial</b> ou <b>Instalar app</b>.</p><p class="muted small">Esta versão é independente. Os dados deste aparelho não são sincronizados com o OficinaPro do PC.</p></div>`);
  $('#app').innerHTML=html;
 }
 function field(label,key,value='',type='text',extra=''){return `<label for="f-${key}">${label}</label><input id="f-${key}" name="${key}" type="${type}" value="${esc(value)}" ${extra}>`;}
@@ -82,6 +106,8 @@ async function submit(kind,v){
  await refresh();
 }
 document.addEventListener('click',async e=>{
+ if(e.target.closest('[data-act=logout]')){authenticated=false;state.view='inicio';if($('#modal').open)$('#modal').close();render();return;}
+ if(!authenticated)return;
  const tab=e.target.closest('[data-view]');if(tab){go(tab.dataset.view);return;}
  const el=e.target.closest('[data-act]');if(!el)return;const a=el.dataset.act,id=Number(el.dataset.id);try{
   if(a==='close')return $('#modal').close();
@@ -107,9 +133,11 @@ document.addEventListener('click',async e=>{
  }catch(err){alert(err.message||'Não foi possível concluir.');}
 });
 document.addEventListener('submit',async e=>{
+ if(e.target.id==='login-form'){e.preventDefault();await handleLogin(e.target);return;}
+ if(!authenticated){e.preventDefault();return;}
  if(e.target.id==='settings-form'){e.preventDefault();const v=formData(e.target);for(const [key,value] of Object.entries(v))await saveSetting(key,value);await refresh();return msg('Dados da oficina salvos.');}
  if(e.target.id!=='entry-form')return;e.preventDefault();const form=e.target,kind=form.dataset.submit;try{await submit(kind,formData(form));$('#modal').close();msg('Salvo com sucesso.');}catch(err){alert(err.message||'Não foi possível salvar.');}
 });
 function exportBackup(){const data={format:'OficinaPro-Android',version:1,exported_at:now(),stores:state.records};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='oficinapro-backup-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000);}
-document.addEventListener('change',async e=>{if(e.target.id!=='import-file')return;try{const raw=JSON.parse(await e.target.files[0].text());if(raw.format!=='OficinaPro-Android'||raw.version!==1||!STORE_NAMES.every(s=>Array.isArray(raw.stores[s])))throw Error('Arquivo de backup inválido.');if(!confirm('Substituir TODOS os dados deste celular pelo backup?'))return;const tx=state.db.transaction(STORE_NAMES,'readwrite');for(const s of STORE_NAMES){const st=tx.objectStore(s);st.clear();for(const record of raw.stores[s])st.put(record);}await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});await refresh();msg('Backup importado.');}catch(err){alert(err.message||'Falha ao importar.');}e.target.value='';});
+document.addEventListener('change',async e=>{if(!authenticated||e.target.id!=='import-file')return;try{const raw=JSON.parse(await e.target.files[0].text());if(raw.format!=='OficinaPro-Android'||raw.version!==1||!STORE_NAMES.every(s=>Array.isArray(raw.stores[s])))throw Error('Arquivo de backup inválido.');if(!confirm('Substituir TODOS os dados deste celular pelo backup?'))return;const tx=state.db.transaction(STORE_NAMES,'readwrite');for(const s of STORE_NAMES){const st=tx.objectStore(s);st.clear();for(const record of raw.stores[s])st.put(record);}await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});await refresh();msg('Backup importado.');}catch(err){alert(err.message||'Falha ao importar.');}e.target.value='';});
 (async()=>{try{state.db=await openDb();await refresh();if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});}catch(err){$('#app').innerHTML=`<div class="notice error">Não foi possível abrir o banco de dados do aparelho: ${esc(err.message)}</div>`;}})();
